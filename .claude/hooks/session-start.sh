@@ -20,4 +20,16 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   echo "export PATH=\"$GCLOUD_BIN:\$PATH\"" >> "$CLAUDE_ENV_FILE"
 fi
 
+# Authenticate using service account key if available
+KEY_FILE="${GOOGLE_APPLICATION_CREDENTIALS:-}"
+if [ -n "$KEY_FILE" ] && [ -f "$KEY_FILE" ]; then
+  echo "Authenticating with service account key: $KEY_FILE"
+  "$GCLOUD_BIN/gcloud" auth activate-service-account --key-file="$KEY_FILE"
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    echo "export GOOGLE_APPLICATION_CREDENTIALS=\"$KEY_FILE\"" >> "$CLAUDE_ENV_FILE"
+  fi
+else
+  echo "No service account key found. Set GOOGLE_APPLICATION_CREDENTIALS to a key file path for automatic auth."
+fi
+
 echo "Google Cloud SDK ready at $GCLOUD_BIN"
