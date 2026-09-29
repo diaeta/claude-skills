@@ -13,10 +13,11 @@ The canonical templates live inside the Diaeta repo, **not in this skill**. Neve
 
 | Channel | Template path | Placeholder driver |
 |---------|---------------|--------------------|
-| Email HTML body | `src/templates/messages/email-report-<lang>.html` | `{consultation_date}`, `{next_appointment_block_html}` |
+| Email HTML body | `src/templates/messages/email-report-<lang>.html` | `{consultation_date}`, `{next_appointment_block_html}`, `{contact_block_html}` |
 | Email subject | `SUBJECTS` dict in `send_report.py` (top of file) | none |
 | Email signature | Pierre's Gmail `sendAs` signature, fetched at send time | per-language `sendAs` entry |
-| SMS body | `src/templates/messages/sms-report-<lang>.txt` | `{consultation_date}` |
+| SMS body | `src/templates/messages/sms-report-<lang>.txt` | `{consultation_date}`, `{contact_line}` |
+| Contact line (both) | `diaeta_contact.py` | `--nutrium` flag |
 
 `<lang>` ∈ `{fr, en, nl, de}`. If a file for the patient's language is missing, both scripts fall back to `fr`.
 
@@ -38,7 +39,9 @@ Read `patients/<ref>/patient-info-<date>.json` to get:
 ## Step 2 — Ask for contact details
 
 Ask Pierre (in French, always):
-> "Quelle est l'adresse e-mail de la patiente/du patient ? Et le numéro de téléphone (format international, ex. +32 486 030 076) ? Y a-t-il un prochain rendez-vous à mentionner (optionnel) ?"
+> "Quelle est l'adresse e-mail de la patiente/du patient ? Et le numéro de téléphone (format international, ex. +32 486 030 076) ? Y a-t-il un prochain rendez-vous à mentionner (optionnel) ? La patiente/le patient utilise-t-elle/il l'application Nutrium ?"
+
+**Nutrium — règle de Pierre (2026-09-29) :** on dirige le patient vers l'application Nutrium pour ses questions **seulement s'il l'utilise**. Oui → passer `--nutrium` aux deux scripts (« écrivez-moi via l'application Nutrium »). Non, ou pas de réponse → pas de flag, la ligne de contact donne pierre@diaeta.be. Ne devine jamais : les notes libres du `patient-info` le disent parfois (« pas d'application Nutrium »), mais c'est Pierre qui tranche. Même règle pour tout envoi hors modèle (annexe, menu révisé) : Nutrium seulement si le patient l'utilise.
 
 ## Step 3 — Preview and confirm the EMAIL
 
@@ -46,6 +49,7 @@ Render a text preview by:
 1. Reading `src/templates/messages/email-report-<lang>.html`.
 2. Substituting `{consultation_date}` with `patient-info.json`'s value.
 3. If Pierre gave a next-appointment string, substituting `{next_appointment_block_html}` with its plain-text equivalent (otherwise leave blank).
+3b. Substituting `{contact_block_html}` with `diaeta_contact.contact_block_html(lang, nutrium)`.
 4. Stripping HTML for the preview.
 5. Reading the subject from `SUBJECTS[lang]` in `send_report.py`.
 
@@ -66,7 +70,7 @@ From the repo root (`C:\Users\pierr\Documents\Tasks\v3-safety-net`):
 
 ```bash
 python send_report.py <patient_ref> <absolute_pdf_path> <to_email> \
-  [--next-appointment "mercredi 20 mai 2026 à l'Espace Pluridys"]
+  [--next-appointment "mercredi 20 mai 2026 à l'Espace Pluridys"] [--nutrium]
 ```
 
 Arguments are positional (match send_sms.py convention). `send_report.py` handles template loading, signature fetch, MIME assembly (PDF + inline logo + inline portrait), and dispatch via `gws gmail users messages send`. It prints `Email envoyé à <addr> (lang=<lang>, gmail_id=<id>)` on success.
@@ -77,7 +81,7 @@ Arguments are positional (match send_sms.py convention). `send_report.py` handle
 
 Render a text preview by:
 1. Reading `src/templates/messages/sms-report-<lang>.txt`.
-2. Substituting `{consultation_date}`.
+2. Substituting `{consultation_date}` and `{contact_line}` (`diaeta_contact.contact_line(lang, nutrium)`).
 
 Show Pierre:
 ```
@@ -91,7 +95,7 @@ Then ask:
 ## Step 6 — Send the SMS
 
 ```bash
-python send_sms.py <patient_ref> <absolute_pdf_path> <to_phone>
+python send_sms.py <patient_ref> <absolute_pdf_path> <to_phone> [--nutrium]
 ```
 
 `send_sms.py` loads Textbee credentials from `.env` (`TEXTBEE_API_KEY`, `TEXTBEE_DEVICE_ID`) and POSTs to `https://api.textbee.dev/api/v1/gateway/devices/<device_id>/sendSMS`. It prints the Textbee batch ID on success.
